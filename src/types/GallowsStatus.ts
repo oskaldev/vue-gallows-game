@@ -1,0 +1,1 @@
+export type GallowsStatus = 'win' | 'lose'

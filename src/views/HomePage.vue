@@ -1,31 +1,65 @@
 <script setup lang='ts'>
-	import { computed, ref } from 'vue'
+	import { computed, onMounted, ref, watch } from 'vue'
 	import { GallowsFigure, GallowsHeader, GallowsNotification, GallowsPopup, GallowsWord, GallowsWrongLetters } from '../components'
+	import { fetchWord } from '../api/api'
 
-	const word = ref('василий')
+	const word = ref('')
 	const letters = ref<string[]>([])
 	const correctLetters = computed(() => letters.value.filter(x => word.value.includes(x)))
 	const wrongLetters = computed(() => letters.value.filter(x => !word.value.includes(x)))
+	const notific = ref<InstanceType<typeof GallowsNotification> | null>(null)
+	const popup = ref<InstanceType<typeof GallowsPopup> | null>(null)
+	const isStatusLose = computed(() => wrongLetters.value.length === 6)
+	const isStatusWin = computed(() => [...word.value].every(x => correctLetters.value.includes(x)))
 
-	window.addEventListener('keydown', ({ key }) => {
-		if (letters.value.includes(key)) {
-			return
-		}
-		if (/[а-яА-ЯёЁ]/.test(key)) {
-			letters.value.push(key.toLowerCase())
+	const loadNewWord = async () => {
+		word.value = await fetchWord()
+		letters.value = []
+	}
+
+	watch(wrongLetters, () => {
+		if (isStatusLose.value) {
+			popup.value?.open('lose')
 		}
 	})
+	watch(correctLetters, () => {
+		if (isStatusWin.value) {
+			popup.value?.open('win')
+		}
+	})
+	// Загружаем слово при старте игры
+	onMounted(loadNewWord)
+
+	window.addEventListener('keydown', ({ key }) => {
+		const lowerKey = key.toLowerCase()
+		if (isStatusLose.value || isStatusWin.value) {
+			return
+		}
+		if (letters.value.includes(lowerKey)) {
+			notific.value?.open()
+			setTimeout(() => notific.value?.close(), 2000)
+			return
+		}
+		if (/[а-яА-ЯёЁ]/.test(lowerKey)) {
+			letters.value.push(lowerKey)
+		}
+	})
+
+	const restart = async () => {
+		await loadNewWord()
+		popup.value?.close()
+	}
 </script>
 
 <template>
 	<GallowsHeader />
 	<div class="game-container">
-		<GallowsFigure />
+		<GallowsFigure :wrong-letters-count="wrongLetters.length" />
 		<GallowsWrongLetters :wrong-letters="wrongLetters" />
 		<GallowsWord :word="word" :correct-letters="correctLetters" />
 	</div>
-	<GallowsPopup v-if="false" />
-	<GallowsNotification />
+	<GallowsPopup @restart="restart" ref="popup" :word="word" />
+	<GallowsNotification ref="notific" />
 </template>
 
 <style></style>
